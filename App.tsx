@@ -1942,16 +1942,21 @@ const ExportOptionsModal = ({ isOpen, onClose, onConfirm }: {
         history: true,
         templates: true,
         bundles: true,
+        excludeVideos: false,
     });
 
     const handleToggle = (key: keyof typeof options) => {
-        setOptions(prev => ({ ...prev, [key]: !prev[key] }));
+        const newOptions = { ...options, [key]: !options[key] };
+        if (key === 'templates' && !newOptions.templates) {
+            newOptions.excludeVideos = false;
+        }
+        setOptions(newOptions);
     };
 
-    const Checkbox = ({ label, checked, onChange }: { label: string, checked: boolean, onChange: () => void }) => (
+    const Checkbox = ({ label, checked, onChange, disabled = false }: { label: string, checked: boolean, onChange: () => void, disabled?: boolean }) => (
         <label 
-            onClick={onChange}
-            className="flex items-center space-x-3 p-3 bg-gray-800/50 rounded-lg transition-colors cursor-pointer hover:bg-gray-700/50"
+            onClick={disabled ? undefined : onChange}
+            className={`flex items-center space-x-3 p-3 bg-gray-800/50 rounded-lg transition-colors ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:bg-gray-700/50'}`}
         >
             <div className={`w-5 h-5 rounded border-2 ${checked ? 'bg-indigo-500 border-indigo-400' : 'border-gray-500'} flex items-center justify-center`}>
                 {checked && <IconCheck className="w-3 h-3 text-white"/>}
@@ -1969,6 +1974,17 @@ const ExportOptionsModal = ({ isOpen, onClose, onConfirm }: {
                     <Checkbox label="History" checked={options.history} onChange={() => handleToggle('history')} />
                     <Checkbox label="Templates" checked={options.templates} onChange={() => handleToggle('templates')} />
                     <Checkbox label="Bundles" checked={options.bundles} onChange={() => handleToggle('bundles')} />
+                </div>
+                <div className="pt-4 mt-4 border-t border-[var(--border-primary)]">
+                    <Checkbox 
+                        label="Exclude Video Previews" 
+                        checked={options.excludeVideos} 
+                        onChange={() => handleToggle('excludeVideos')}
+                        disabled={!options.templates}
+                    />
+                    <p className={`text-xs text-gray-500 mt-1 pl-8 transition-opacity ${!options.templates ? 'opacity-50' : ''}`}>
+                        Significantly reduces file size by removing embedded video data from templates.
+                    </p>
                 </div>
                 <div className="modal-footer">
                     <button onClick={onClose} className="btn-secondary btn">Cancel</button>
@@ -2258,7 +2274,15 @@ function App() {
               exportData.history = historyData;
           }
           if (options.templates) {
-              const templatesData = await db.getStoreData('templates');
+              let templatesData = await db.getStoreData<PromptTemplate>('templates');
+              if (options.excludeVideos) {
+                  templatesData = templatesData.map(template => {
+                      const newTemplate = { ...template };
+                      delete newTemplate.exampleVideo;
+                      delete newTemplate.exampleVideoType;
+                      return newTemplate;
+                  });
+              }
               exportData.templates = templatesData;
           }
           if (options.bundles) {
